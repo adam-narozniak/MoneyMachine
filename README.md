@@ -1,4 +1,6 @@
-# Money Machine (Predicting stock prices)
+<img src="images/money-machine-logo.png" alt="money machine logo" width="200" />
+
+# Money Machine: Predicting stock prices
 # Aims
 Investigates the efficiency of stock predictions described in papers/other people work
 # Examine papers
