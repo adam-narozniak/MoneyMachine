@@ -1,3 +1,5 @@
 .idea/
 venv/
 .ipynb_checkpoints/
+money_machine/notebooks/wandb/*
+**/__pycache__/

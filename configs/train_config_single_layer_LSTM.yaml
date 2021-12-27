@@ -1,0 +1,4 @@
+loss: "mean_squared_error"
+optimizer: "adam"
+batch_size: 1
+epochs: 50
