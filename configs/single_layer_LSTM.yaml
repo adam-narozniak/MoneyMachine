@@ -1,0 +1,4 @@
+model: single-layer-LSTM
+neurons: 200
+input_shape_0: 1
+input_shape_1: 16
