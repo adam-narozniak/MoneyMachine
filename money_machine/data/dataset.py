@@ -19,6 +19,34 @@ def add_ta_data(data, n, fncs: list = None):
     return data
 
 
+def generate_multitimestep_data(data, n_additional_days):
+    """
+    Gather n_days data as a single instance.
+
+    It accomplishes that by shifting the whole data and concatenating it together.
+
+    Args:
+        data:
+        n_additional_days: number of days to have in a single row
+
+    Returns:
+        multitimestep_data
+
+    """
+    # stack the data from left to right (on left the earliest one, then the newer)
+    new_data = data.shift(n_additional_days)
+    for shift in range(n_additional_days - 1, -1, -1):
+        shifted_data = data.shift(shift)
+        shifted_data.columns = [col + f"_{shift}" for col in shifted_data.columns]
+        new_data = pd.concat([new_data, shifted_data], axis=1)
+    # new_data = new_data.dropna(axis=0)
+    return new_data
+
+
+def reshape_to_multistep_data(multistep_data, n_additional_days):
+    return multistep_data.reshape(multistep_data.shape[0], (n_additional_days + 1), -1)
+
+
 def y_label_for_n_day_pred(data, n):
     """
     Creates labels for prediction of n days ahead.
