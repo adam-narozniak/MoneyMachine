@@ -1,0 +1,5 @@
+model: single-layer-LSTM
+neurons: 100
+dropout: 0.2
+input_shape_0: 1
+input_shape_1: 16
