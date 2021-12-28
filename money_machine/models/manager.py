@@ -15,6 +15,7 @@ class Manager:
         self.X_train = None
         self.y_train = None
         self.y_train_pd = None
+        self.y_scaled = None
 
         self.X_train_sc = None
         self.y_train_sc = None
@@ -51,6 +52,7 @@ class Manager:
         if scale_y:
             self.y_train_sc = self.scaler_y.fit_transform(self.y_train)
             self.y_test_sc = self.scaler_y.transform(self.y_test)
+        self.y_scaled = scale_y
 
     def expand_dim_to_3(self):
         if self.X_train.ndim == 2:
@@ -62,14 +64,20 @@ class Manager:
         self.model.compile(loss=self.train_config["loss"], optimizer=self.train_config["optimizer"])
 
     def train(self):
-        self.model.fit(self.X_train_sc, self.y_train_sc, epochs=self.train_config["epochs"], shuffle=False)
+        if self.y_scaled:
+            return self.model.fit(self.X_train_sc, self.y_train_sc, epochs=self.train_config["epochs"], shuffle=False)
+        else:
+            return self.model.fit(self.X_train_sc, self.y_train, epochs=self.train_config["epochs"], shuffle=False)
 
     def print_summary(self):
         print(self.model.summary())
 
     def predict(self):
-        self.y_pred_sc = self.model.predict(self.X_test_sc)
-        self.y_pred = self.scaler_y.inverse_transform(self.y_pred_sc)
+        if self.y_scaled:
+            self.y_pred_sc = self.model.predict(self.X_test_sc)
+            self.y_pred = self.scaler_y.inverse_transform(self.y_pred_sc)
+        else:
+            self.y_pred = self.model.predict(self.X_test_sc)
 
     def evaluate(self):
         mae, mape, mse = calculate_all_metrics(self.y_test, self.y_pred)
