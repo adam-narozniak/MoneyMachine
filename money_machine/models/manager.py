@@ -1,10 +1,10 @@
 """Module to perform common training operations."""
 from money_machine.models.utils import load_config
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import numpy as np
 from money_machine.evaluation.metrics import calculate_all_metrics
 from money_machine.visualization.stock import plot_stock
-
+from money_machine.data.dataset import reshape_to_multistep_data
 
 class Manager:
     def __init__(self, model_, train_config_path, scaler_X=None, scaler_y=None):
@@ -44,7 +44,7 @@ class Manager:
 
     def scale_X_y(self, scale_y=True):
         if self.scaler_X is None:
-            self.scaler_X = MinMaxScaler()
+            self.scaler_X = StandardScaler()
         if self.scaler_y is None:
             self.scaler_y = MinMaxScaler()
         self.X_train_sc = self.scaler_X.fit_transform(self.X_train)
@@ -54,11 +54,15 @@ class Manager:
             self.y_test_sc = self.scaler_y.transform(self.y_test)
         self.y_scaled = scale_y
 
-    def expand_dim_to_3(self):
-        if self.X_train.ndim == 2:
-            self.X_train_sc = np.expand_dims(self.X_train_sc, 1)
-        if self.X_test.ndim == 2:
-            self.X_test_sc = np.expand_dims(self.X_test_sc, 1)
+    def expand_dim_to_3(self, multistep=False, **kwargs):
+        if multistep:
+            self.X_train_sc = reshape_to_multistep_data(self.X_train_sc, kwargs["n_additional_days"])
+            self.X_test_sc = reshape_to_multistep_data(self.X_test_sc, kwargs["n_additional_days"])
+        else:
+            if self.X_train.ndim == 2:
+                self.X_train_sc = np.expand_dims(self.X_train_sc, 1)
+            if self.X_test.ndim == 2:
+                self.X_test_sc = np.expand_dims(self.X_test_sc, 1)
 
     def compile(self):
         self.model.compile(loss=self.train_config["loss"], optimizer=self.train_config["optimizer"])
