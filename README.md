@@ -4,7 +4,7 @@
 # Aims
 Develop machine learning models and trading strategies for stock price prediction.
 Also, to investigate the efficiency of stock predictions described in papers/other people work
-# My work
+# Work
 * dataset created based on paper 1
 * LSTM model (general idea paper 1)
 * walk forward validation strategy
