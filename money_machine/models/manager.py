@@ -1,10 +1,13 @@
 """Module to perform common training operations."""
-from money_machine.models.utils import load_config
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import numpy as np
-from money_machine.evaluation.metrics import calculate_all_metrics
-from money_machine.visualization.stock import plot_stock
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from tqdm import tqdm
+
 from money_machine.data.dataset import reshape_to_multistep_data
+from money_machine.evaluation.metrics import calculate_all_metrics
+from money_machine.models.utils import load_config
+from money_machine.visualization.stock import plot_stock
+
 
 class Manager:
     def __init__(self, model_, train_config_path, scaler_X=None, scaler_y=None):
@@ -29,6 +32,8 @@ class Manager:
 
         self.y_pred = None
         self.y_pred_sc = None
+
+        self.walk_forward_hist = []
 
         self.evaluation = {"mae": None, "mape": None, "mse": None}
 
@@ -82,6 +87,30 @@ class Manager:
             self.y_pred = self.scaler_y.inverse_transform(self.y_pred_sc)
         else:
             self.y_pred = self.model.predict(self.X_test_sc)
+
+    def predict_walk_forward(self, train_time=1):
+        """
+        After every single prediction the model is trained on old X_train plus an additional data point from the
+            test dataset.
+
+        Args:
+            train_time: number of epochs to train every single new instance
+
+        """
+        y_pred_scs = []
+        X_train_plus_one = self.X_train_sc.copy()
+        y_train_plus_one = self.y_train_sc.copy()
+        test_len = self.y_test_sc.shape[0]
+        for x_test, y_test in tqdm(zip(self.X_test_sc, self.y_test_sc), total=test_len):
+            x_test = np.expand_dims(x_test, 0)
+            y_test = np.expand_dims(y_test, 1)
+            y_pred_sc = self.model.predict(x_test)
+            y_pred_scs.append(y_pred_sc)
+            X_train_plus_one = np.concatenate([X_train_plus_one, x_test])
+            y_train_plus_one = np.concatenate([y_train_plus_one, y_test])
+            hist = self.model.fit(X_train_plus_one, y_train_plus_one, epochs=train_time, shuffle=False, verbose=0)
+            self.walk_forward_hist.append(hist)
+        self.y_pred_sc = np.array(y_pred_scs).reshape(-1, 1)
 
     def evaluate(self):
         mae, mape, mse = calculate_all_metrics(self.y_test, self.y_pred)

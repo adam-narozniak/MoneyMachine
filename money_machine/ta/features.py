@@ -21,7 +21,7 @@ def weighted_moving_average(data, n):
 def momentum(data, n):
     check_args(momentum, n)
     data[f"Momentum-{n}days"] = data.loc[:, "Close"] - np.roll(data.loc[:, "Close"], n)
-    data.loc[:, f"Momentum-{n}days"].iloc[:n] = np.nan
+    data.iloc[:n, data.columns.get_loc(f"Momentum-{n}days")] = np.nan
     return data
 
 
