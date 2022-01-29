@@ -3,6 +3,7 @@ Module to fetch for Google Trends data and perform appropriate scaling.
 
 Conventions:
     Google Trends Data is kept in pd.DataFrame objects where the index is dt.datetime.
+    If it is concatenated together for many different periods it has MultiIndex: "pull_id", "date".
 """
 import datetime as dt
 
@@ -23,11 +24,28 @@ def check_fetch_data_correctness(start_date: dt.date, end_date: dt.date, overlap
             f"the overlap: {overlap} and grater than 0 but is: {date_diff}")
 
 
-def create_pulling_periods(start_date: dt.date, end_date: dt.date, overlap: dt.timedelta, period: dt.timedelta,
-                           overlapping=True):
-    """Based on the given start and end date create period that will be used for data pulling"""
+def create_pulling_periods(start_date: dt.date,
+                           end_date: dt.date,
+                           overlap: dt.timedelta,
+                           period: dt.timedelta) -> tuple[list[dt.date], list[dt.date]]:
+    """
+    Based on the given start and end date create period that will be used for data pulling.
+
+    Args:
+        start_date: the fist date of the search of the first period
+        end_date: the last date of the search of the last period
+        overlap: number of days that two consecutive periods will have the same,
+            especially 0 mean that the periods won't have any days in common
+        period: length (in days) of the single period
+    Note:
+        The last period will have greater or equal overlapping period. It's because the there are probably not integer
+        number of parts of periods with overlaps in the specified timeframe
+    Returns:
+
+    """
+    delta = overlap - dt.timedelta(1)
     date_diff = end_date - start_date
-    check_fetch_data_correctness(start_date, end_date, overlap, date_diff)
+    check_fetch_data_correctness(start_date, end_date, delta, date_diff)
     starts = []
     ends = []
     current_start_date = start_date
@@ -35,9 +53,10 @@ def create_pulling_periods(start_date: dt.date, end_date: dt.date, overlap: dt.t
     while current_end_date < end_date:
         starts.append(current_start_date)
         ends.append(current_end_date)
-        current_start_date = current_start_date + period - overlap
-        current_end_date = current_end_date + period - overlap
-    if overlapping is False:
+        current_start_date = current_start_date + period - delta
+        current_end_date = current_end_date + period - delta
+    # different behaviour for overlapping data and not
+    if delta == dt.timedelta(0):
         current_start_date = ends[-1] + dt.timedelta(1)
         current_end_date = end_date
         starts.append(current_start_date)
@@ -75,8 +94,8 @@ def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[d
     return result
 
 
-def create_overlap_periods(pull_starts, pull_ends, overlap):
-    """Lists are in reverse chronological order."""
+def create_overlap_periods(pull_starts: list[dt.date], pull_ends: list[dt.date], overlap: dt.timedelta):
+    """Returned lists are in reverse chronological order."""
     pull_starts, pull_ends = pull_starts[1:], pull_ends[:-1]
     pull_starts.reverse()
     pull_ends.reverse()
