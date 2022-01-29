@@ -8,8 +8,11 @@ Conventions:
 import datetime as dt
 
 import numpy as np
+import pandas
 import pandas as pd
 from pytrends.request import TrendReq
+
+from money_machine.data.pytrends_fetcher import PytrendsFetcher
 
 
 def create_timeframe_from_datetime(start_date: dt.date, end_date: dt.date):
@@ -25,7 +28,7 @@ def check_fetch_data_correctness(start_date: dt.date, end_date: dt.date, overlap
 
 
 def average_overlap(data1, data2):
-    data = pd.concat([data1, data2], axis=0).iloc[:, 0]
+    data = pd.concat([data1, data2], axis=0)
     data = data.reset_index()
     averaged_data = data.groupby("date").mean()
     return averaged_data
@@ -71,7 +74,8 @@ def create_pulling_periods(start_date: dt.date,
         starts.append(current_start_date)
         ends.append(current_end_date)
     else:
-        current_start_date = end_date - period
+        # current_start_date = end_date - period # source of triple
+        current_start_date = max(ends[-1] - delta, ends[-2])
         current_end_date = end_date
         starts.append(current_start_date)
         ends.append(current_end_date)
@@ -109,11 +113,26 @@ def create_overlap_periods(pull_starts: list[dt.date], pull_ends: list[dt.date],
     pull_starts.reverse()
     pull_ends.reverse()
     for a, b in zip(pull_starts, pull_ends):
-        assert (b - a) >= overlap
+        dates_diff = b - a + dt.timedelta(1)
+        assert dates_diff >= overlap, f"The date {b} should be later than {a} by at least {overlap}, " \
+                                      f"but is {dates_diff} instead"
     return pull_starts, pull_ends
 
 
-def denormalize_by_overlapping_periods(data, overlap_starts, overlap_ends):
+def denormalize_by_overlapping_periods(data, overlap_starts, overlap_ends, if_average_overlap=False):
+    """
+    Finds the maximum value older data (already denormalized) in the overlapping period, takes the value from the
+        same date from the newer data and calculates the scaling factor that the new data is multiplied by.
+
+    Args:
+        data:
+        overlap_starts:
+        overlap_ends:
+        if_average_overlap:
+
+    Returns:
+
+    """
     pull_id = data.iloc[-1].name[0]
     normalized_data = data.loc[pull_id].iloc[:, 0].astype(np.float32)
     for overlap_start, overlap_end in zip(overlap_starts, overlap_ends):
@@ -121,24 +140,34 @@ def denormalize_by_overlapping_periods(data, overlap_starts, overlap_ends):
         new_data = data.loc[pull_id].iloc[:, 0]
         normalized_overlap = normalized_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
         max_normalized_overlap = normalized_overlap.max()
-        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index.values[0]
-        new_data_reference_point = new_data.loc[pd.Timestamp(max_normalized_overlap_id)]
+        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index[0]
+        new_data_reference_point = new_data.loc[max_normalized_overlap_id]
         scaling_factor = float(max_normalized_overlap) / new_data_reference_point
         new_data = new_data * scaling_factor
-        normalized_data = pd.concat(
-            [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[max_normalized_overlap_id:]], axis=0)
+        if if_average_overlap is False:
+            normalized_data_division_id = max_normalized_overlap_id + dt.timedelta(1)
+            normalized_data = pd.concat(
+                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[normalized_data_division_id:]], axis=0)
+        else:
+            averaged_overlap = average_overlap(new_data.loc[overlap_start:], normalized_data)
+            # minus dt.timedelta(1) because loc includes the last index
+            normalized_data = pd.concat(
+                [new_data.loc[:overlap_start - dt.timedelta(1)], normalized_data], axis=0)
+            normalized_data.loc[overlap_start:] = averaged_overlap.squeeze('columns')
+
         normalized_data = normalized_data / normalized_data.max() * 100.
     return normalized_data
 
 
-def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends, average_overlap=False):
+def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends, if_average_overlap=False):
     """
-    TODO: check if teh average_overlap True works; I just wrote the code it's not checked and maybe the new average function will work better
+    Finds maximum values of both data in the overlapping period and calculates a scaling factor that the new data will
+        be multiplied by.
     Args:
         data:
         overlap_starts:
         overlap_ends:
-        average_overlap: if False then the data will be create by putting the scaled data after the maximum point of
+        if_average_overlap: if False then the data will be create by putting the scaled data after the maximum point of
             the previously computed data
 
     Returns:
@@ -153,27 +182,34 @@ def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends,
         max_normalized_overlap = normalized_overlap.max()
         new_data_overlap = new_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
         max_new_data_overlap = new_data_overlap.max()
-        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index.values[0]
+        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index[0]
 
         scaling_factor = float(max_normalized_overlap) / max_new_data_overlap
         new_data = new_data * scaling_factor
-        if average_overlap is False:
+        if if_average_overlap is False:
+            # loc includes lower and !upper! bound that's why the upper bound needs to one day later
+            # note that it's better to increase the upper bound of the normalized data because there must be next index
+            # if the new data index were decreased then if that was the last blog that and all blog would overlap then
+            # a non-existing index would be chosen
+            normalized_data_division_id = max_normalized_overlap_id + dt.timedelta(1)
             normalized_data = pd.concat(
-                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[max_normalized_overlap_id:]], axis=0)
+                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[normalized_data_division_id:]], axis=0)
         else:
+            averaged_overlap = average_overlap(new_data.loc[overlap_start:], normalized_data)
+            # minus dt.timedelta(1) because loc includes the last index
             normalized_data = pd.concat(
-                [new_data.loc[:overlap_start], normalized_data], axis=0)
-            normalized_data[overlap_start:overlap_end] = (new_data.loc[overlap_start:overlap_end].iloc[:,
-                                                          0] + normalized_data.loc[overlap_start:overlap_end]) / 2
+                [new_data.loc[:overlap_start - dt.timedelta(1)], normalized_data], axis=0)
+            normalized_data.loc[overlap_start:] = averaged_overlap.squeeze('columns')
 
         normalized_data = normalized_data / normalized_data.max() * 100.
-        return normalized_data
+    return normalized_data
 
 
 def denormalize_daily_by_weekly(daily_data, weekly_data):
-    # cut weekly data so it's for the same period as daily data
-    min_daily_date = min(daily_data.index)
-    max_daily_date = max(daily_data.index)
+    if isinstance(daily_data.index, pd.MultiIndex):
+        daily_data = daily_data.reset_index(0, drop=True).iloc[:, 0]
+    if isinstance(weekly_data.index, pandas.MultiIndex):
+        weekly_data = weekly_data.reset_index(0, drop=True).iloc[:, 0]
     daily_adj_by_weekly = pd.concat([daily_data, weekly_data], axis=1).fillna(method="ffill")
     daily_adj_by_weekly.dropna(inplace=True)
     adjusted = daily_adj_by_weekly.iloc[:, 0] * daily_adj_by_weekly.iloc[:, 1]
@@ -195,10 +231,21 @@ def denormalize_daily_with_overlapping_periods_by_weekly(data, weekly_data):
 
 
 if __name__ == "__main__":
-    print("hello word")
+    kw_list = ["bitcoin"]
+    end_date = dt.date.today()
+    start_date = end_date - dt.timedelta(5 * 12 * 30 - 1)
+    period = dt.timedelta(30 * 9 - 1)
+    overlap_100 = dt.timedelta(100)
+    overlap_0 = dt.timedelta(0)
     pytrends = TrendReq(hl='en-US', tz=360, retries=3, backoff_factor=0.1)
-    kw_list = ["Blockchain"]
-    start_date = '2021-03-24'
-    end_date = '2021-12-24'
-    timeframe_date_to_date = start_date + " " + end_date
-    pytrends.build_payload(kw_list, timeframe=timeframe_date_to_date)
+    pf_100 = PytrendsFetcher(pytrends)
+    pf_0 = PytrendsFetcher(pytrends)
+    pull_starts_100, pull_ends_100 = create_pulling_periods(start_date, end_date, overlap_100, period)
+    pull_starts_0, pull_ends_0 = create_pulling_periods(start_date, end_date, overlap_0, period)
+    result_100 = pull_overlapping_daily_data(pf_100, kw_list, pull_starts_100, pull_ends_100)
+    result_0 = pull_overlapping_daily_data(pf_0, kw_list, pull_starts_0, pull_ends_0)
+    overlap_starts, overlap_ends = create_overlap_periods(pull_starts_100, pull_ends_100, overlap_100)
+    denormalized_by_overlapping_periods_max_with_avg = denormalize_by_overlapping_periods_maxes(result_100,
+                                                                                                overlap_starts,
+                                                                                                overlap_ends,
+                                                                                                if_average_overlap=True)
