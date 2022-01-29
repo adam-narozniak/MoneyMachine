@@ -4,15 +4,11 @@ Module to fetch for Google Trends data and perform appropriate scaling.
 Conventions:
     Google Trends Data is kept in pd.DataFrame objects where the index is dt.datetime.
 """
-import time
 import datetime as dt
-from datetime import date, datetime, timedelta
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pytrends.request import TrendReq
-import pytrends
 
 
 def create_timeframe_from_datetime(start_date: dt.date, end_date: dt.date):
@@ -55,15 +51,13 @@ def create_pulling_periods(start_date: dt.date, end_date: dt.date, overlap: dt.t
     return starts, ends
 
 
-def pull_overlapping_daily_data(kw_list, start_dates: list[dt.date], end_dates: list[dt.date], overlap: dt.timedelta,
-                                period: dt.timedelta):
+def pull_overlapping_daily_data(fetcher, kw_list, start_dates: list[dt.date], end_dates: list[dt.date]):
     result = pd.DataFrame()
     maxes = []
     mins = []
     for pull_id, (current_start_date, current_end_date) in enumerate(zip(start_dates, end_dates)):
         timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
-        pytrends.build_payload(kw_list, timeframe=timeframe)
-        new_data = pytrends.interest_over_time()
+        new_data = fetcher.fetch_data(kw_list, timeframe)
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         maxes.append(new_data.max())
