@@ -51,19 +51,28 @@ def create_pulling_periods(start_date: dt.date, end_date: dt.date, overlap: dt.t
     return starts, ends
 
 
-def pull_overlapping_daily_data(fetcher, kw_list, start_dates: list[dt.date], end_dates: list[dt.date]):
+def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[dt.date], end_dates: list[dt.date]):
+    """
+    Fetches the data from the google trends using interface from Fetcher.
+    Args:
+        fetcher: an instance that inherits from Fetcher
+        kw_list: search keywords list
+        start_dates:
+        end_dates:
+
+    Returns:
+        data for given periods concatenated together.
+
+    TODO: so check that the timedelta is the same for every pull
+    """
     result = pd.DataFrame()
-    maxes = []
-    mins = []
     for pull_id, (current_start_date, current_end_date) in enumerate(zip(start_dates, end_dates)):
         timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
         new_data = fetcher.fetch_data(kw_list, timeframe)
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
-        maxes.append(new_data.max())
-        mins.append(new_data.min())
         result = pd.concat([result, new_data], axis=0)
-    return result, maxes, mins
+    return result
 
 
 def create_overlap_periods(pull_starts, pull_ends, overlap):
