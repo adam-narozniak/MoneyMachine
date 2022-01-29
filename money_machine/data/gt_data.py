@@ -24,6 +24,13 @@ def check_fetch_data_correctness(start_date: dt.date, end_date: dt.date, overlap
             f"the overlap: {overlap} and grater than 0 but is: {date_diff}")
 
 
+def average_overlap(data1, data2):
+    data = pd.concat([data1, data2], axis=0).iloc[:, 0]
+    data = data.reset_index()
+    averaged_data = data.groupby("date").mean()
+    return averaged_data
+
+
 def create_pulling_periods(start_date: dt.date,
                            end_date: dt.date,
                            overlap: dt.timedelta,
@@ -42,15 +49,17 @@ def create_pulling_periods(start_date: dt.date,
         number of parts of periods with overlaps in the specified timeframe
     Returns:
 
+    TODO: fix when the data perfectly fits the periods (meaning the loop will end ideally and there is no need to pull the next interval)
     """
     delta = overlap - dt.timedelta(1)
+    period = period - dt.timedelta(1)
     date_diff = end_date - start_date
     check_fetch_data_correctness(start_date, end_date, delta, date_diff)
     starts = []
     ends = []
     current_start_date = start_date
     current_end_date = start_date + period
-    while current_end_date < end_date:
+    while current_end_date < end_date + dt.timedelta(1):
         starts.append(current_start_date)
         ends.append(current_end_date)
         current_start_date = current_start_date + period - delta
@@ -82,7 +91,7 @@ def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[d
     Returns:
         data for given periods concatenated together.
 
-    TODO: so check that the timedelta is the same for every pull
+    TODO: so check that the timedelta is the same for every entry in each pull
     """
     result = pd.DataFrame()
     for pull_id, (current_start_date, current_end_date) in enumerate(zip(start_dates, end_dates)):
@@ -120,6 +129,45 @@ def denormalize_by_overlapping_periods(data, overlap_starts, overlap_ends):
             [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[max_normalized_overlap_id:]], axis=0)
         normalized_data = normalized_data / normalized_data.max() * 100.
     return normalized_data
+
+
+def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends, average_overlap=False):
+    """
+    TODO: check if teh average_overlap True works; I just wrote the code it's not checked and maybe the new average function will work better
+    Args:
+        data:
+        overlap_starts:
+        overlap_ends:
+        average_overlap: if False then the data will be create by putting the scaled data after the maximum point of
+            the previously computed data
+
+    Returns:
+
+    """
+    pull_id = data.iloc[-1].name[0]
+    normalized_data = data.loc[pull_id].iloc[:, 0].astype(np.float32)
+    for overlap_start, overlap_end in zip(overlap_starts, overlap_ends):
+        pull_id -= 1
+        new_data = data.loc[pull_id].iloc[:, 0]
+        normalized_overlap = normalized_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
+        max_normalized_overlap = normalized_overlap.max()
+        new_data_overlap = new_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
+        max_new_data_overlap = new_data_overlap.max()
+        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index.values[0]
+
+        scaling_factor = float(max_normalized_overlap) / max_new_data_overlap
+        new_data = new_data * scaling_factor
+        if average_overlap is False:
+            normalized_data = pd.concat(
+                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[max_normalized_overlap_id:]], axis=0)
+        else:
+            normalized_data = pd.concat(
+                [new_data.loc[:overlap_start], normalized_data], axis=0)
+            normalized_data[overlap_start:overlap_end] = (new_data.loc[overlap_start:overlap_end].iloc[:,
+                                                          0] + normalized_data.loc[overlap_start:overlap_end]) / 2
+
+        normalized_data = normalized_data / normalized_data.max() * 100.
+        return normalized_data
 
 
 def denormalize_daily_by_weekly(daily_data, weekly_data):
