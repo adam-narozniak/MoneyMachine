@@ -39,7 +39,8 @@ def create_pulling_periods(start_date: dt.date,
                            overlap: dt.timedelta,
                            period: dt.timedelta) -> tuple[list[dt.date], list[dt.date]]:
     """
-    Based on the given start and end date create period that will be used for data pulling.
+    Based on the given start and end date create period that will be used for data pulling. It starts creating the
+    intervals form the start (in chronological order).
 
     Args:
         start_date: the fist date of the search of the first period
@@ -48,6 +49,7 @@ def create_pulling_periods(start_date: dt.date,
             especially 0 mean that the periods won't have any days in common
         period: length (in days) of the single period
     Note:
+        TODO: check if that description is valid after you found the bug
         The last period will have greater or equal overlapping period. It's because the there are probably not integer
         number of parts of periods with overlaps in the specified timeframe
     Returns:
@@ -105,6 +107,12 @@ def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[d
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
     return result
+
+
+def create_anchor_banks(gtab_fetcher, start_dates: list[dt.date], end_dates: list[dt.date]):
+    for current_start_date, current_end_date in zip(start_dates, end_dates):
+        timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
+        gtab_fetcher.create_anchorbank(timeframe)
 
 
 def create_overlap_periods(pull_starts: list[dt.date], pull_ends: list[dt.date], overlap: dt.timedelta):
