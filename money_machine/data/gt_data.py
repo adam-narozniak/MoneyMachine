@@ -42,22 +42,38 @@ def create_pulling_periods(start_date: dt.date,
     Based on the given start and end date create period that will be used for data pulling. It starts creating the
     intervals form the start (in chronological order).
 
+    Start dates and ends dates can be thought of as a recursive sequences.
+    start(0) and end(N) are given
+    start(n) = n*period - n*overlap
+    end(n) = (n+1)*period - n*overlap
+    start(N) is not always calculated using this formula (in order to make the result more accurate)
+    end(N) can't be calculated using that formula if it is not a perfect fit (period and overlap wise; end(N) had to
+        satisfy the given formula which is rate)
+    end(N) is calculated as end(N-1) - overlap, which is the same as start(N)
+
     Args:
         start_date: the fist date of the search of the first period
         end_date: the last date of the search of the last period
         overlap: number of days that two consecutive periods will have the same,
-            especially 0 mean that the periods won't have any days in common
+            especially 0 means that the periods won't have any days in common; it should be at least of the length of
+            the smallest time acceptable in google trends for query
         period: length (in days) of the single period
     Note:
-        TODO: check if that description is valid after you found the bug
-        The last period will have greater or equal overlapping period. It's because the there are probably not integer
-        number of parts of periods with overlaps in the specified timeframe
+        The last period might have equal or smaller overlapping period. It's because the there are probably not discrete
+         number of parts of periods with overlaps in the specified timeframe. The normal procedure is to decrease the
+         last period.
     Returns:
-
-    TODO: fix when the data perfectly fits the periods (meaning the loop will end ideally and there is no need to pull the next interval)
+        chronologically ordered lists of starts and ends
     """
     delta = overlap - dt.timedelta(1)
-    period = period - dt.timedelta(1)
+    period = period  # - dt.timedelta(1)
+    period_minus_two_deltas = period - 2 * delta
+    if period_minus_two_deltas < dt.timedelta(0):
+        # minus ones here are for the human interpretability for words overlap and period
+        raise Exception(f"The period should be greater or equal that 2*delta where delta = (overlap -1).\n"
+                        f"The values provided are period: {period}, overlap: {overlap}.\n"
+                        f"They  don't satisfy the condition.\n"
+                        f"For given period: {period}, the biggest overlap which you can give as an argument is {period / 2 + dt.timedelta(1)}")
     date_diff = end_date - start_date
     check_fetch_data_correctness(start_date, end_date, delta, date_diff)
     starts = []
@@ -69,15 +85,11 @@ def create_pulling_periods(start_date: dt.date,
         ends.append(current_end_date)
         current_start_date = current_start_date + period - delta
         current_end_date = current_end_date + period - delta
-    # different behaviour for overlapping data and not
-    if delta == dt.timedelta(0):
-        current_start_date = ends[-1] + dt.timedelta(1)
-        current_end_date = end_date
-        starts.append(current_start_date)
-        ends.append(current_end_date)
-    else:
-        # current_start_date = end_date - period # source of triple
-        current_start_date = max(ends[-1] - delta, ends[-2])
+    # add the last period only if it's needed, meaning when the last computed end date is not the same as end_date
+    if current_end_date != end_date:
+        # ends[-1] - delta is the same as the normal start would be at that time
+        # it could be also left as current_start_date
+        current_start_date = ends[-1] - delta
         current_end_date = end_date
         starts.append(current_start_date)
         ends.append(current_end_date)
