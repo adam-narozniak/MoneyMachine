@@ -161,72 +161,66 @@ def create_overlap_periods(pull_starts: list[dt.date], pull_ends: list[dt.date],
     return pull_starts, pull_ends
 
 
-def denormalize_by_overlapping_periods(data, overlap_starts, overlap_ends, if_average_overlap=False):
+def denormalize_by_overlapping_periods(data,
+                                       overlap_starts,
+                                       overlap_ends,
+                                       strategy="max-to-max",
+                                       if_average_overlap=False,
+                                       order="reverse-chronological"):
     """
-    Finds the maximum value older data (already denormalized) in the overlapping period, takes the value from the
-        same date from the newer data and calculates the scaling factor that the new data is multiplied by.
-
+    Denormalized data based on scaling factor calculated based on the overlapping periods of two data based on the
+        specified `strategy` and `if_average_overlap`.
     Args:
         data:
         overlap_starts:
         overlap_ends:
-        if_average_overlap:
-
-    Returns:
-
-    """
-    pull_id = data.iloc[-1].name[0]
-    normalized_data = data.loc[pull_id].iloc[:, 0].astype(np.float32)
-    for overlap_start, overlap_end in zip(overlap_starts, overlap_ends):
-        pull_id -= 1
-        new_data = data.loc[pull_id].iloc[:, 0]
-        normalized_overlap = normalized_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
-        max_normalized_overlap = normalized_overlap.max()
-        max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index[0]
-        new_data_reference_point = new_data.loc[max_normalized_overlap_id]
-        scaling_factor = float(max_normalized_overlap) / new_data_reference_point
-        new_data = new_data * scaling_factor
-        if if_average_overlap is False:
-            normalized_data_division_id = max_normalized_overlap_id + dt.timedelta(1)
-            normalized_data = pd.concat(
-                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[normalized_data_division_id:]], axis=0)
-        else:
-            averaged_overlap = average_overlap(new_data.loc[overlap_start:], normalized_data)
-            # minus dt.timedelta(1) because loc includes the last index
-            normalized_data = pd.concat(
-                [new_data.loc[:overlap_start - dt.timedelta(1)], normalized_data], axis=0)
-            normalized_data.loc[overlap_start:] = averaged_overlap.squeeze('columns')
-
-        normalized_data = normalized_data / normalized_data.max() * 100.
-    return normalized_data
-
-
-def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends, if_average_overlap=False):
-    """
-    Finds maximum values of both data in the overlapping period and calculates a scaling factor that the new data will
-        be multiplied by.
-    Args:
-        data:
-        overlap_starts:
-        overlap_ends:
-        if_average_overlap: if False then the data will be create by putting the scaled data after the maximum point of
+        strategy: "max-to-point" or "max-to-max", method to used when creating scaling factor
+            "max-to-max" - find the max of both data in the overlapping period, (WARNING: it might be a mistake to take
+                the max from the already calibrated data and a new data that is not calibrated)
+            "max-to-point" - find the max of the already calibrated (old) data from the overlapping period and uses that
+                point with the new data value coming form the same date (WARNING: it might be a mistake to take it from
+                already calibrated data instead from the raw data)
+        if_average_overlap: if False then the data will be created by putting the scaled data after the maximum point of
             the previously computed data
+        order: order in which the scaling will be performed, note the result will also depend on the overlap periods
+            you provide
+            "reverse-chronological" - starting from the end date and going to the start (drawback is that you have
+                rather meaningless end data which is the most crutial)
+            "chronological" - starts with start date and goes to the end date
+            TODO:write something more
 
+    TODO: add option to create the scaling point based on raw data on both sides
     Returns:
 
     """
-    pull_id = data.iloc[-1].name[0]
+    original_data = data.copy()
+    if order == "reverse-chronological":
+        pull_id = data.iloc[-1].name[0]
+    elif order == "chronological":
+        pull_id = data.iloc[0].name[0]
+    else:
+        raise KeyError(f"There is no `order`: {order}."
+                       f"Please refer to the documentation to find the available keywords.")
     normalized_data = data.loc[pull_id].iloc[:, 0].astype(np.float32)
     for overlap_start, overlap_end in zip(overlap_starts, overlap_ends):
-        pull_id -= 1
+        if order == "reverse-chronological":
+            pull_id -= 1
+        elif order == "chronological":
+            pull_id += 1
         new_data = data.loc[pull_id].iloc[:, 0]
         normalized_overlap = normalized_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
         max_normalized_overlap = normalized_overlap.max()
-        new_data_overlap = new_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
-        max_new_data_overlap = new_data_overlap.max()
         max_normalized_overlap_id = normalized_overlap[normalized_overlap == max_normalized_overlap].index[0]
-
-        scaling_factor = float(max_normalized_overlap) / max_new_data_overlap
+        if strategy == "max-to-point":
+            # get the date of the maximum value of the already calibrated data
+            new_data_reference_point = new_data.loc[max_normalized_overlap_id]
+        elif strategy == "max-to-max":
+            new_data_overlap = new_data.loc[pd.Timestamp(overlap_start):pd.Timestamp(overlap_end)]
+            new_data_reference_point = new_data_overlap.max()
+        else:
+            raise KeyError(f"There is no strategy: {strategy}."
+                           f"Please refer to the documentation to find the available keywords.")
+        scaling_factor = float(max_normalized_overlap) / new_data_reference_point
         new_data = new_data * scaling_factor
         if if_average_overlap is False:
             # loc includes lower and !upper! bound that's why the upper bound needs to one day later
@@ -234,16 +228,26 @@ def denormalize_by_overlapping_periods_maxes(data, overlap_starts, overlap_ends,
             # if the new data index were decreased then if that was the last blog that and all blog would overlap then
             # a non-existing index would be chosen
             normalized_data_division_id = max_normalized_overlap_id + dt.timedelta(1)
-            normalized_data = pd.concat(
-                [new_data.loc[:max_normalized_overlap_id], normalized_data.loc[normalized_data_division_id:]], axis=0)
+            if order == "reverse-chronological":
+                normalized_data = pd.concat(
+                    [new_data.loc[:max_normalized_overlap_id],
+                     normalized_data.loc[normalized_data_division_id:]], axis=0)
+            elif order == "chronological":
+                normalized_data = pd.concat(
+                    [normalized_data.loc[:max_normalized_overlap_id],
+                     new_data.loc[normalized_data_division_id:]], axis=0)
         else:
             averaged_overlap = average_overlap(new_data.loc[overlap_start:], normalized_data)
-            # minus dt.timedelta(1) because loc includes the last index
-            normalized_data = pd.concat(
-                [new_data.loc[:overlap_start - dt.timedelta(1)], normalized_data], axis=0)
+            if order == "reverse-chronological":
+                # minus dt.timedelta(1) because loc includes the last index
+                normalized_data = pd.concat(
+                    [new_data.loc[:overlap_start - dt.timedelta(1)], normalized_data], axis=0)
+            elif order == "chronological":
+                normalized_data = pd.concat(
+                    [normalized_data, new_data.loc[overlap_end + dt.timedelta(1):]], axis=0)
             normalized_data.loc[overlap_start:] = averaged_overlap.squeeze('columns')
 
-        normalized_data = normalized_data / normalized_data.max() * 100.
+    normalized_data = normalized_data / normalized_data.max() * 100.
     return normalized_data
 
 
@@ -287,7 +291,14 @@ if __name__ == "__main__":
     result_100 = pull_overlapping_daily_data(pf_100, kw_list, pull_starts_100, pull_ends_100)
     result_0 = pull_overlapping_daily_data(pf_0, kw_list, pull_starts_0, pull_ends_0)
     overlap_starts, overlap_ends = create_overlap_periods(pull_starts_100, pull_ends_100, overlap_100)
-    denormalized_by_overlapping_periods_max_with_avg = denormalize_by_overlapping_periods_maxes(result_100,
-                                                                                                overlap_starts,
-                                                                                                overlap_ends,
-                                                                                                if_average_overlap=True)
+    denormalized_by_overlapping_periods_max = denormalize_by_overlapping_periods(result_100,
+                                                                                 overlap_starts,
+                                                                                 overlap_ends,
+                                                                                 strategy="max-to-max",
+                                                                                 if_average_overlap=False)
+    denormalized_by_overlapping_periods_max_chrono = denormalize_by_overlapping_periods(result_100,
+                                                                                        overlap_starts[::-1],
+                                                                                        overlap_ends[::-1],
+                                                                                        strategy="max-to-max",
+                                                                                        if_average_overlap=False,
+                                                                                        order="chronological")
