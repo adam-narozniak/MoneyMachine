@@ -156,7 +156,7 @@ def create_overlap_periods(pull_starts: list[dt.date], pull_ends: list[dt.date],
     pull_ends.reverse()
     for a, b in zip(pull_starts, pull_ends):
         dates_diff = b - a + dt.timedelta(1)
-        assert dates_diff >= overlap, f"The date {b} should be later than {a} by at least {overlap}, " \
+        assert dates_diff == overlap, f"The date {b} should be later than {a} by exactly {overlap}, " \
                                       f"but is {dates_diff} instead"
     return pull_starts, pull_ends
 
