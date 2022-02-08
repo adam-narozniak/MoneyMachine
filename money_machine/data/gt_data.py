@@ -73,7 +73,7 @@ def create_live_pulling_periods(data_for_days: list[dt.date]):
     return starts, ends
 
 
-def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date: dt.date ):
+def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date: dt.date):
     """
     Based on the first and last day that you neeed to make prediction for the function returns all
     dates between (both included)
@@ -85,6 +85,7 @@ def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date
 
     """
     return pd.date_range(first_prediction_date, last_prediction_date)
+
 
 def create_pulling_periods_based_on_prediction_dates(prediction_dates: Union[list[dt.date], tuple[dt.date, dt.date]]):
     """
@@ -236,17 +237,17 @@ def pull_data(fetcher,
         files = cache_dir.glob("*")
         last_cache = max(files, key=lambda x: x.stat().st_ctime)
         result = pd.read_pickle(last_cache)
-        last_read_point = result.index.get_level_values(0).max()
+        read_pulls = set(result.index.get_level_values(0).unique().to_list())
     else:
         result = pd.DataFrame()
-        last_read_point = -1
+        read_pulls = set([])
     cache_path = cache_dir / pathlib.Path(f"data_{kw_list[0]}_{time.time_ns()}.pkl")
     n_pulls = len(start_dates)
     missed_starts = []
     missed_ends = []
     missed_pull_ids = []
     for pull_id, (current_start_date, current_end_date) in enumerate(tqdm(zip(start_dates, end_dates), total=n_pulls)):
-        if pull_id <= last_read_point:
+        if pull_id in read_pulls:
             continue
         if timeframe_type == "date":
             timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
@@ -257,9 +258,10 @@ def pull_data(fetcher,
                            f"You provided {timeframe_type} instead")
         new_data = fetcher.fetch_data(kw_list, timeframe)
         if new_data.empty:
+            dates_diff = (current_end_date - current_start_date).days * 24
             missed_starts.append(current_start_date)
             missed_ends.append(current_end_date)
-            missed_pull_ids.append(pull_id)
+            missed_pull_ids.append(pull_id * dates_diff)
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
