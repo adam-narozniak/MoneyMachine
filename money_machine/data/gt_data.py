@@ -11,7 +11,6 @@ import time
 from typing import Union
 
 import numpy as np
-import pandas
 import pandas as pd
 from pytrends.request import TrendReq
 from tqdm import tqdm
@@ -288,7 +287,7 @@ def denormalize_by_overlapping_periods(data,
         order: order in which the scaling will be performed, note the result will also depend on the overlap periods
             you provide
             "reverse-chronological" - starting from the end date and going to the start (drawback is that you have
-                rather meaningless end data which is the most crutial)
+                rather meaningless end data which is the most crucial)
             "chronological" - starts with start date and goes to the end date
             TODO:write something more
 
@@ -296,7 +295,6 @@ def denormalize_by_overlapping_periods(data,
     Returns:
 
     """
-    original_data = data.copy()
     if order == "reverse-chronological":
         pull_id = data.iloc[-1].name[0]
     elif order == "chronological":
@@ -357,7 +355,7 @@ def denormalize_by_overlapping_periods(data,
 def denormalize_daily_by_weekly(daily_data, weekly_data):
     if isinstance(daily_data.index, pd.MultiIndex):
         daily_data = daily_data.reset_index(0, drop=True).iloc[:, 0]
-    if isinstance(weekly_data.index, pandas.MultiIndex):
+    if isinstance(weekly_data.index, pd.MultiIndex):
         weekly_data = weekly_data.reset_index(0, drop=True).iloc[:, 0]
     daily_adj_by_weekly = pd.concat([daily_data, weekly_data], axis=1).fillna(method="ffill")
     daily_adj_by_weekly.dropna(inplace=True)
