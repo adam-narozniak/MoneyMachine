@@ -7,13 +7,13 @@ Conventions:
 """
 import datetime as dt
 import pathlib
+import time
 from typing import Union
 
 import numpy as np
 import pandas
 import pandas as pd
 from pytrends.request import TrendReq
-import time
 from tqdm import tqdm
 
 from money_machine.data.pytrends_fetcher import PytrendsFetcher
@@ -210,6 +210,9 @@ def pull_data(fetcher,
         last_read_point = -1
     cache_path = cache_dir / pathlib.Path(f"data_{kw_list[0]}_{time.time_ns()}.pkl")
     n_pulls = len(start_dates)
+    missed_starts = []
+    missed_ends = []
+    missed_pull_ids = []
     for pull_id, (current_start_date, current_end_date) in enumerate(tqdm(zip(start_dates, end_dates), total=n_pulls)):
         if pull_id <= last_read_point:
             continue
@@ -221,10 +224,21 @@ def pull_data(fetcher,
             raise KeyError(f"Only 'date' and 'datetime' timeframes are supported. "
                            f"You provided {timeframe_type} instead")
         new_data = fetcher.fetch_data(kw_list, timeframe)
+        if new_data.empty:
+            missed_starts.append(current_start_date)
+            missed_ends.append(current_end_date)
+            missed_pull_ids.append(pull_id)
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
         result.to_pickle(str(cache_path))
+    if len(missed_starts) != 0:
+        print(f"There are {len(missed_starts)} results. Recursive call.")
+        missed_result = pull_data(fetcher, kw_list, missed_starts, missed_ends, timeframe_type)
+        missed_result = missed_result.reset_index()
+        missed_result["pull_id"] = missed_pull_ids
+        missed_result = missed_result.set_index(["pull_id", "day"])
+        result = pd.concat([result, missed_result], axis=0)
     return result
 
 
