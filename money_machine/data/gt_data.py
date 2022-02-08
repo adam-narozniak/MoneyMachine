@@ -90,7 +90,8 @@ def create_pulling_periods(start_date: dt.date,
                            end_date: dt.date,
                            overlap: dt.timedelta,
                            period: dt.timedelta,
-                           chronological_order: bool = True) -> tuple[list[dt.date], list[dt.date]]:
+                           chronological_order: bool = True,
+                           assert_repeats: bool = True) -> tuple[list[dt.date], list[dt.date]]:
     """
     Based on the given start and end date create period that will be used for data pulling. It starts creating the
     intervals form the start (in chronological order).
@@ -113,6 +114,7 @@ def create_pulling_periods(start_date: dt.date,
         period: length (in days) of the single period
         chronological_order: whether to start creating from start_date or end_date; the result is that
             the last (in chronological_order) or the first period might be shorter
+        assert_repeats: if True then the there will be at most 2 datapoint for the same date, otherwise might be more
     Note:
         The last period might have equal or smaller overlapping period. It's because the there are probably not discrete
          number of parts of periods with overlaps in the specified timeframe. The normal procedure is to decrease the
@@ -124,13 +126,14 @@ def create_pulling_periods(start_date: dt.date,
     input_period = period
     period = period - dt.timedelta(1)  # this is due to the fact that we count the end day as a whole
     period_minus_two_deltas = period - 2 * delta
-    # if period_minus_two_deltas < dt.timedelta(0):
-    #     # minus ones here are for the human interpretability for words overlap and period
-    #     raise Exception(f"The period should be greater or equal that 2*delta where delta = (overlap -1).\n"
-    #                     f"The values provided are period: {input_period}, overlap: {overlap}.\n"
-    #                     f"They  don't satisfy the condition.\n"
-    #                     f"For given period: {input_period}, the biggest overlap which you can give as an argument "
-    #                     f"is {period / 2 + dt.timedelta(1)}")
+    if assert_repeats:
+        if period_minus_two_deltas < dt.timedelta(0):
+            # minus ones here are for the human interpretability for words overlap and period
+            raise Exception(f"The period should be greater or equal that 2*delta where delta = (overlap -1).\n"
+                            f"The values provided are period: {input_period}, overlap: {overlap}.\n"
+                            f"They  don't satisfy the condition.\n"
+                            f"For given period: {input_period}, the biggest overlap which you can give as an argument "
+                            f"is {period / 2 + dt.timedelta(1)}")
     date_diff = end_date - start_date
     check_fetch_data_correctness(start_date, end_date, delta, date_diff)
     starts = []
