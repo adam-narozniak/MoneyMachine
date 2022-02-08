@@ -6,17 +6,69 @@ Conventions:
     If it is concatenated together for many different periods it has MultiIndex: "pull_id", "date".
 """
 import datetime as dt
+from typing import Union
 
 import numpy as np
 import pandas
 import pandas as pd
 from pytrends.request import TrendReq
+from tqdm import tqdm
 
 from money_machine.data.pytrends_fetcher import PytrendsFetcher
+
+HOURLY_DATE_STRING_FORMAT = "%Y-%m-%dT%H"
 
 
 def create_timeframe_from_datetime(start_date: dt.date, end_date: dt.date):
     return str(start_date) + " " + str(end_date)
+
+
+def create_hourly_timeframe(start_time: Union[dt.datetime, dt.date], end_time: Union[dt.datetime, dt.date]):
+    """
+    Creates timeframe that is in a format necessary for google trends query to get hourly data.
+    When given dates instead of datetimes, start date has hour 0 and end date 23.
+    Args:
+        start_time:
+        end_time:
+
+    Returns:
+        String in the format necessary for google trends query.
+    """
+    if isinstance(start_time, dt.date) and isinstance(end_time, dt.date):
+        start_time = dt.datetime.combine(start_time, dt.time(0))
+        end_time = dt.datetime.combine(end_time, dt.time(23))
+    elif isinstance(start_time, dt.datetime) and isinstance(end_time, dt.datetime):
+        pass
+    timeframe = start_time.strftime(HOURLY_DATE_STRING_FORMAT) + " " + end_time.strftime(HOURLY_DATE_STRING_FORMAT)
+    return timeframe
+
+
+def create_live_pulling_period(data_for_day: dt.date):
+    """
+    data for day: created by this function data will be used to predict that day
+    """
+    # data_for_day_datetime: it doesnt' mean that the prediction will be made for this time, it's just a convince
+    data_for_day_datetime = dt.datetime.combine(data_for_day, dt.time(0))
+    live_period_start = data_for_day_datetime - dt.timedelta(7)
+    live_period_end = data_for_day_datetime - dt.timedelta(hours=1)
+    return live_period_start, live_period_end
+
+
+def create_live_pulling_periods(data_for_days: list[dt.date]):
+    starts = []
+    ends = []
+    for d in data_for_days:
+        start, end = create_live_pulling_period(d)
+        starts.append(start)
+        ends.append(end)
+    return starts, ends
+
+
+def transform_hourly_to_daily(hourly_data, keyword):
+    hourly_data = hourly_data.loc[:, keyword]
+    hourly_data = hourly_data.reset_index()
+    daily_data = hourly_data.groupby(hourly_data["date"].dt.date)[keyword].mean()
+    return daily_data
 
 
 def check_fetch_data_correctness(start_date: dt.date, end_date: dt.date, overlap: dt.timedelta,
@@ -72,13 +124,13 @@ def create_pulling_periods(start_date: dt.date,
     input_period = period
     period = period - dt.timedelta(1)  # this is due to the fact that we count the end day as a whole
     period_minus_two_deltas = period - 2 * delta
-    if period_minus_two_deltas < dt.timedelta(0):
-        # minus ones here are for the human interpretability for words overlap and period
-        raise Exception(f"The period should be greater or equal that 2*delta where delta = (overlap -1).\n"
-                        f"The values provided are period: {input_period}, overlap: {overlap}.\n"
-                        f"They  don't satisfy the condition.\n"
-                        f"For given period: {input_period}, the biggest overlap which you can give as an argument "
-                        f"is {period / 2 + dt.timedelta(1)}")
+    # if period_minus_two_deltas < dt.timedelta(0):
+    #     # minus ones here are for the human interpretability for words overlap and period
+    #     raise Exception(f"The period should be greater or equal that 2*delta where delta = (overlap -1).\n"
+    #                     f"The values provided are period: {input_period}, overlap: {overlap}.\n"
+    #                     f"They  don't satisfy the condition.\n"
+    #                     f"For given period: {input_period}, the biggest overlap which you can give as an argument "
+    #                     f"is {period / 2 + dt.timedelta(1)}")
     date_diff = end_date - start_date
     check_fetch_data_correctness(start_date, end_date, delta, date_diff)
     starts = []
@@ -119,7 +171,11 @@ def create_pulling_periods(start_date: dt.date,
     return starts, ends
 
 
-def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[dt.date], end_dates: list[dt.date]):
+def pull_data(fetcher,
+              kw_list: list[str],
+              start_dates: list[dt.date],
+              end_dates: list[dt.date],
+              timeframe_type: str = "date"):
     """
     Fetches the data from the google trends using interface from Fetcher.
     Args:
@@ -127,6 +183,7 @@ def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[d
         kw_list: search keywords list
         start_dates:
         end_dates:
+        timeframe_type: either date or datetime
 
     Returns:
         data for given periods concatenated together.
@@ -134,13 +191,24 @@ def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[d
     TODO: so check that the timedelta is the same for every entry in each pull
     """
     result = pd.DataFrame()
-    for pull_id, (current_start_date, current_end_date) in enumerate(zip(start_dates, end_dates)):
-        timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
+    n_pulls = len(start_dates)
+    for pull_id, (current_start_date, current_end_date) in enumerate(tqdm(zip(start_dates, end_dates), total=n_pulls)):
+        if timeframe_type == "date":
+            timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
+        elif timeframe_type == "datetime":
+            timeframe = create_hourly_timeframe(current_start_date, current_end_date)
+        else:
+            raise KeyError(f"Only 'date' and 'datetime' timeframes are supported. "
+                           f"You provided {timeframe_type} instead")
         new_data = fetcher.fetch_data(kw_list, timeframe)
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
     return result
+
+
+def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[dt.date], end_dates: list[dt.date]):
+    pull_data(fetcher, kw_list, start_dates, end_dates, timeframe_type="date")
 
 
 def create_anchor_banks(gtab_fetcher, start_dates: list[dt.date], end_dates: list[dt.date]):
