@@ -6,12 +6,14 @@ Conventions:
     If it is concatenated together for many different periods it has MultiIndex: "pull_id", "date".
 """
 import datetime as dt
+import pathlib
 from typing import Union
 
 import numpy as np
 import pandas
 import pandas as pd
 from pytrends.request import TrendReq
+import time
 from tqdm import tqdm
 
 from money_machine.data.pytrends_fetcher import PytrendsFetcher
@@ -64,10 +66,13 @@ def create_live_pulling_periods(data_for_days: list[dt.date]):
     return starts, ends
 
 
-def transform_hourly_to_daily(hourly_data, keyword):
-    hourly_data = hourly_data.loc[:, keyword]
-    hourly_data = hourly_data.reset_index()
-    daily_data = hourly_data.groupby(hourly_data["date"].dt.date)[keyword].mean()
+def transform_hourly_to_daily(hourly_data):
+    """Averages weekly hourly data into daily."""
+    hourly_data = hourly_data.iloc[:, 0]
+    dates = pd.to_datetime(hourly_data.index.get_level_values(1).values).date
+    hourly_data = hourly_data.to_frame().set_index(dates, append=True)
+    hourly_data.index = hourly_data.index.set_names("day", level=2)
+    daily_data = hourly_data.groupby(level=[0, 2]).mean()
     return daily_data
 
 
@@ -91,7 +96,7 @@ def create_pulling_periods(start_date: dt.date,
                            overlap: dt.timedelta,
                            period: dt.timedelta,
                            chronological_order: bool = True,
-                           assert_repeats: bool = True) -> tuple[list[dt.date], list[dt.date]]:
+                           assert_repeats: bool = False) -> tuple[list[dt.date], list[dt.date]]:
     """
     Based on the given start and end date create period that will be used for data pulling. It starts creating the
     intervals form the start (in chronological order).
@@ -193,9 +198,21 @@ def pull_data(fetcher,
 
     TODO: so check that the timedelta is the same for every entry in each pull
     """
-    result = pd.DataFrame()
+    cache_dir = pathlib.Path(f"/Users/adamnarozniak/Projects/MoneyMachine/cache/")
+    if_empty = not any(cache_dir.iterdir())
+    if not if_empty:
+        files = cache_dir.glob("*")
+        last_cache = max(files, key=lambda x: x.stat().st_ctime)
+        result = pd.read_pickle(last_cache)
+        last_read_point = result.index.get_level_values(0).max()
+    else:
+        result = pd.DataFrame()
+        last_read_point = -1
+    cache_path = cache_dir / pathlib.Path(f"data_{kw_list[0]}_{time.time_ns()}.pkl")
     n_pulls = len(start_dates)
     for pull_id, (current_start_date, current_end_date) in enumerate(tqdm(zip(start_dates, end_dates), total=n_pulls)):
+        if pull_id <= last_read_point:
+            continue
         if timeframe_type == "date":
             timeframe = create_timeframe_from_datetime(current_start_date, current_end_date)
         elif timeframe_type == "datetime":
@@ -207,11 +224,12 @@ def pull_data(fetcher,
         new_data["pull_id"] = pull_id
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
+        result.to_pickle(str(cache_path))
     return result
 
 
 def pull_overlapping_daily_data(fetcher, kw_list: list[str], start_dates: list[dt.date], end_dates: list[dt.date]):
-    pull_data(fetcher, kw_list, start_dates, end_dates, timeframe_type="date")
+    return pull_data(fetcher, kw_list, start_dates, end_dates, timeframe_type="date")
 
 
 def create_anchor_banks(gtab_fetcher, start_dates: list[dt.date], end_dates: list[dt.date]):
