@@ -56,6 +56,14 @@ def create_live_pulling_period(data_for_day: dt.date):
 
 
 def create_live_pulling_periods(data_for_days: list[dt.date]):
+    """
+
+    Args:
+        data_for_days: list of days that you need prediction for
+
+    Returns:
+
+    """
     starts = []
     ends = []
     for d in data_for_days:
@@ -63,6 +71,31 @@ def create_live_pulling_periods(data_for_days: list[dt.date]):
         starts.append(start)
         ends.append(end)
     return starts, ends
+
+
+def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date: dt.date ):
+    """
+    Based on the first and last day that you neeed to make prediction for the function returns all
+    dates between (both included)
+    Args:
+        last_prediction_date:
+        first_prediction_date :
+
+    Returns:
+
+    """
+    return pd.date_range(first_prediction_date, last_prediction_date)
+
+def create_pulling_periods_based_on_prediction_dates(prediction_dates: Union[list[dt.date], tuple[dt.date, dt.date]]):
+    """
+    Gives pulling periods for archive data (NON-real time data)
+    Args:
+        prediction_dates: either list of prediction dates or first and last date of prediction
+
+    Returns:
+
+    """
+    return None
 
 
 def transform_hourly_to_daily(hourly_data):
