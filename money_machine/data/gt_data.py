@@ -88,13 +88,32 @@ def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date
     return pd.date_range(first_prediction_date, last_prediction_date)
 
 
-def transform_hourly_to_daily(hourly_data):
-    """Averages weekly hourly data into daily."""
-    hourly_data = hourly_data.iloc[:, 0]
-    dates = pd.to_datetime(hourly_data.index.get_level_values(1).values).date
-    hourly_data = hourly_data.to_frame().set_index(dates, append=True)
-    hourly_data.index = hourly_data.index.set_names("day", level=2)
-    daily_data = hourly_data.groupby(level=[0, 2]).mean()
+def transform_hourly_to_daily(hourly_data: pd.DataFrame, amount: str = "all"):
+    """
+    Averages weekly hourly data into daily.
+    Args:
+        hourly_data: data with MultiIndex ("pull_id", "date") when amount is "all" or
+            Index ("date") when amount is "single"
+        amount: {"all"|"single"} usage described above
+
+    Returns:
+
+    """
+    if amount == "single":
+        hourly_data = hourly_data.iloc[:, 0]
+        dates = pd.to_datetime(hourly_data.index.get_level_values(0).values).date
+        hourly_data = hourly_data.to_frame().set_index(dates, append=True)
+        hourly_data.index = hourly_data.index.set_names("day", level=1)
+        daily_data = hourly_data.groupby(level=1).mean()
+    elif amount == "all":
+        hourly_data = hourly_data.iloc[:, 0]
+        dates = pd.to_datetime(hourly_data.index.get_level_values(1).values).date
+        hourly_data = hourly_data.to_frame().set_index(dates, append=True)
+        hourly_data.index = hourly_data.index.set_names("day", level=2)
+        daily_data = hourly_data.groupby(level=[0, 2]).mean()
+    else:
+        raise KeyError(f"The given argument for amount parameter: {amount} is not handled."
+                       f"Please refer to the documentation for the possible options.")
     return daily_data
 
 
