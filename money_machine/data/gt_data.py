@@ -44,7 +44,7 @@ def create_hourly_timeframe(start_time: Union[dt.datetime, dt.date], end_time: U
     return timeframe
 
 
-def create_live_pulling_period(data_for_day: dt.date):
+def create_live_pulling_period_based_on_prediction_dates(data_for_day: dt.date):
     """
     data for day: created by this function data will be used to predict that day
     """
@@ -55,19 +55,20 @@ def create_live_pulling_period(data_for_day: dt.date):
     return live_period_start, live_period_end
 
 
-def create_live_pulling_periods(data_for_days: list[dt.date]):
+def create_live_pulling_periods_based_on_prediction_dates(
+        prediction_dates: Union[list[dt.date], tuple[dt.date, dt.date]]):
     """
-
+    Gives pulling periods for archive data (NON-real time data)
     Args:
-        data_for_days: list of days that you need prediction for
+        prediction_dates: list of days that you need prediction for or first and last date of prediction
 
     Returns:
 
     """
     starts = []
     ends = []
-    for d in data_for_days:
-        start, end = create_live_pulling_period(d)
+    for d in prediction_dates:
+        start, end = create_live_pulling_period_based_on_prediction_dates(d)
         starts.append(start)
         ends.append(end)
     return starts, ends
@@ -85,18 +86,6 @@ def create_prediction_dates(first_prediction_date: dt.date, last_prediction_date
 
     """
     return pd.date_range(first_prediction_date, last_prediction_date)
-
-
-def create_pulling_periods_based_on_prediction_dates(prediction_dates: Union[list[dt.date], tuple[dt.date, dt.date]]):
-    """
-    Gives pulling periods for archive data (NON-real time data)
-    Args:
-        prediction_dates: either list of prediction dates or first and last date of prediction
-
-    Returns:
-
-    """
-    return None
 
 
 def transform_hourly_to_daily(hourly_data):
@@ -266,6 +255,7 @@ def pull_data(fetcher,
         new_data.set_index(["pull_id", new_data.index], inplace=True)
         result = pd.concat([result, new_data], axis=0)
         result.to_pickle(str(cache_path))
+    # that is not a reliable solution; GOOGLE data seems to have leaks for that period
     if len(missed_starts) != 0:
         print(f"There are {len(missed_starts)} results. Recursive call.")
         missed_result = pull_data(fetcher, kw_list, missed_starts, missed_ends, timeframe_type)
