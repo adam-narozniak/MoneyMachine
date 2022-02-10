@@ -454,8 +454,9 @@ def merge_data(older: pd.DataFrame, newer: pd.DataFrame, strategy: str):
 
     """
     if strategy == "full_older":
-        older_last_id = older.index.values[-1]
-        newer_adjusted = newer.loc[older_last_id:]
+        older_last_id = older.index.date[-1]
+        newer_first_id = older_last_id + dt.timedelta(1)
+        newer_adjusted = newer.loc[newer_first_id:]
         merged = pd.concat([older, newer_adjusted], axis=0)
         return merged
     else:
