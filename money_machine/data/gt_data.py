@@ -98,6 +98,8 @@ def transform_hourly_to_daily(hourly_data: pd.DataFrame, amount: str = "all"):
 
     Returns:
 
+    TODO: fix the 'all' for the name and type of index
+
     """
     if amount == "single":
         hourly_data = hourly_data.iloc[:, 0]
@@ -105,6 +107,8 @@ def transform_hourly_to_daily(hourly_data: pd.DataFrame, amount: str = "all"):
         hourly_data = hourly_data.to_frame().set_index(dates, append=True)
         hourly_data.index = hourly_data.index.set_names("day", level=1)
         daily_data = hourly_data.groupby(level=1).mean()
+        daily_data.index.name = "date"
+        daily_data.index = pd.to_datetime(daily_data.index)
     elif amount == "all":
         hourly_data = hourly_data.iloc[:, 0]
         dates = pd.to_datetime(hourly_data.index.get_level_values(1).values).date
@@ -129,10 +133,10 @@ def determine_overlap(data1, data2):
     """
     assert data1.shape[1] == 1
     assert data2.shape[1] == 1
-    min_d1 = min(data1.index.values)
-    min_d2 = min(pd.to_datetime(data2.index).date)
-    max_d1 = max(data1.index.values)
-    max_d2 = max(pd.to_datetime(data2.index).date)
+    min_d1 = min(data1.index.date)
+    min_d2 = min(data2.index.date)
+    max_d1 = max(data1.index.date)
+    max_d2 = max(data2.index.date)
     start = max(min_d1, min_d2)
     end = min(max_d1, max_d2)
     return start, end
