@@ -5,4 +5,4 @@ money_machine/notebooks/wandb/*
 **/__pycache__/
 *csv
 *tsv
-data
+/data/
