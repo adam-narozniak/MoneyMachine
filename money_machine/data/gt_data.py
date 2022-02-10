@@ -117,6 +117,27 @@ def transform_hourly_to_daily(hourly_data: pd.DataFrame, amount: str = "all"):
     return daily_data
 
 
+def determine_overlap(data1, data2):
+    """
+    Indexed of both data are sorted and there must be an overlap for this function to work.
+    Args:
+        data1:
+        data2:
+
+    Returns:
+
+    """
+    assert data1.shape[1] == 1
+    assert data2.shape[1] == 1
+    min_d1 = min(data1.index.values)
+    min_d2 = min(pd.to_datetime(data2.index).date)
+    max_d1 = max(data1.index.values)
+    max_d2 = max(pd.to_datetime(data2.index).date)
+    start = max(min_d1, min_d2)
+    end = min(max_d1, max_d2)
+    return start, end
+
+
 def check_fetch_data_correctness(start_date: dt.date, end_date: dt.date, overlap: dt.timedelta,
                                  date_diff: dt.timedelta):
     if date_diff <= overlap or date_diff <= dt.timedelta(0):
