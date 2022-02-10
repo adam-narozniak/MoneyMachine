@@ -442,6 +442,26 @@ def denormalize_daily_with_overlapping_periods_by_weekly(data, weekly_data):
     return denormalized
 
 
+def merge_data(older: pd.DataFrame, newer: pd.DataFrame, strategy: str):
+    """
+
+    Args:
+        older: data with single Index with dates in in it
+        newer:
+        strategy: {"full_older"|"full_newer"|"average"|"older_till_max"| "newer_from_max"}
+
+    Returns:
+
+    """
+    if strategy == "full_older":
+        older_last_id = older.index.values[-1]
+        newer_adjusted = newer.loc[older_last_id:]
+        merged = pd.concat([older, newer_adjusted], axis=0)
+        return merged
+    else:
+        raise KeyError("Other strategies under development")
+
+
 if __name__ == "__main__":
     kw_list = ["bitcoin"]
     end_date = dt.date.today()
