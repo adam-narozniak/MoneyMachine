@@ -459,6 +459,8 @@ def merge_data(older: pd.DataFrame, newer: pd.DataFrame, strategy: str):
         newer_adjusted = newer.loc[newer_first_id:]
         merged = pd.concat([older, newer_adjusted], axis=0)
         return merged
+    elif strategy == "average":
+        return average_overlap(older, newer)
     else:
         raise KeyError("Other strategies under development")
 
