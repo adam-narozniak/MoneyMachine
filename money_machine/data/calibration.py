@@ -25,4 +25,8 @@ def calibrate_by_lin_reg(daily_from_live: pd.DataFrame, archive_data: pd.DataFra
     lin_reg = LinearRegression()
     lin_reg = lin_reg.fit(X_common.values.reshape(-1, 1), y_common.values.reshape(-1, 1))
     calibrated_daily_from_live = lin_reg.predict(daily_from_live.values.reshape(-1, 1))
+    calibrated_daily_from_live = pd.DataFrame(calibrated_daily_from_live,
+                                              index=daily_from_live.index,
+                                              columns=daily_from_live.columns)
+    calibrated_daily_from_live.index = pd.to_datetime(calibrated_daily_from_live.index)
     return calibrated_daily_from_live
