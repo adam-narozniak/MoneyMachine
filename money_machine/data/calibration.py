@@ -29,4 +29,5 @@ def calibrate_by_lin_reg(daily_from_live: pd.DataFrame, archive_data: pd.DataFra
                                               index=daily_from_live.index,
                                               columns=daily_from_live.columns)
     calibrated_daily_from_live.index = pd.to_datetime(calibrated_daily_from_live.index)
+    calibrated_daily_from_live.index.name = "date"
     return calibrated_daily_from_live
