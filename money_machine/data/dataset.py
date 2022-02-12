@@ -15,7 +15,15 @@ def load_data(tickers: list[str], start: dt.datetime, end: dt.datetime):
     return {ticker: web.DataReader(ticker, "yahoo", start, end) for ticker in tickers}
 
 
-def load_tweeter_hashtag_data(url: str, start: dt.datetime=None, end: dt.datetime=None):
+def load_saved_archive_data(path):
+    """Loads data with index: 'pull_id', 'date'."""
+    data = pd.read_csv(path, index_col=0)
+    data["date"] = pd.to_datetime(data["date"])
+    data = data.set_index("date", append=True)
+    return data
+
+
+def load_tweeter_hashtag_data(url: str, start: dt.datetime = None, end: dt.datetime = None):
     """
     Loads tweeter count data of the number of hashtags in a given day.
 
