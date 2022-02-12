@@ -15,6 +15,7 @@ import pandas as pd
 from pytrends.request import TrendReq
 from tqdm import tqdm
 
+from money_machine.data.calibration import calibrate_by_lin_reg
 from money_machine.data.pytrends_fetcher import PytrendsFetcher
 
 HOURLY_DATE_STRING_FORMAT = "%Y-%m-%dT%H"
@@ -467,6 +468,93 @@ def merge_data(older: pd.DataFrame, newer: pd.DataFrame, strategy: str):
         return average_overlap(older, newer)
     else:
         raise KeyError("Other strategies under development")
+
+
+def find_faulty_pull_ids(data, strategy="strict"):
+    """
+    {"strict"|"last"}
+    Two types of faulty pull ids are returned
+    1) the missing ids (google trends doesn't have data for the whole periods)
+    2) partially missing data = zeros (heuristic applied here is to treat the data from a pull as partialy missing the last value must be zero)"""
+    missing_ids = []
+    incomplete_ids = []
+    ids = data.index.get_level_values(0).unique()
+    max_id = ids.max()
+    for i in list(range(max_id + 1)):
+        try:
+            pull_data = data.loc[i]
+            if strategy == "strict":
+                if (pull_data.iloc[:, 0].values == 0).any():
+                    incomplete_ids.append(i)
+            elif strategy == "last":
+                if pull_data.iloc[-1].values[0] == 0:
+                    incomplete_ids.append(i)
+        except:
+            missing_ids.append(i)
+    return missing_ids, incomplete_ids
+
+
+def get_full_stubstitude_of_live(archive_data, current_pull_id, archive_to_live_delta):
+    # so if I am missing a value for my last day period I need to pull an archive for
+    # the number of delta days
+    pulls_diff = archive_to_live_delta.days
+    forward_archive = archive_data.loc[current_pull_id + pulls_diff].iloc[:, 0].to_frame()
+    end_live_date = forward_archive.iloc[-1].name
+    start_live_date = end_live_date - dt.timedelta(6)  # 6 not 7 because we want 7-day period
+    daily_from_live = forward_archive.loc[start_live_date:end_live_date]
+    return daily_from_live
+
+
+def create_real_time_dataset(live_data, archive_data, missing_ids, incomplete_ids, fit_methods="lin_reg"):
+    prediction_day_to_dataset = {}
+    ids = live_data.index.get_level_values(0).unique()
+    max_id = ids.max()
+    faulty_ids = sorted(missing_ids + incomplete_ids)
+    cummulated_archive = archive_data.loc[0].iloc[:, 0].to_frame()
+    # missing_pull_ids = find_missing_pull_ids(live_data)
+    for i in ids:
+
+        # transform live to daily (differently based on the type)
+        if i in missing_ids:
+            # the live data creation will have to be fully recreated
+            archive_to_live_delta = dt.timedelta(3)  # Though I think it's 2 ; TODO: check it well
+            daily_from_live = get_full_stubstitude_of_live(archive_data, i, archive_to_live_delta)
+        elif i in incomplete_ids:
+            current_live = live_data.loc[i]
+            # fix the icomplete periods?
+            # the days in which the incomplete period exist will be
+            # changed to the days from archive data
+            # thought the partially fine data has to be fit to the archive data
+            # which archive data to choose?
+            # the one that violates the reality to the samllest degree
+
+            # I can also apply here few heuristics
+            # 1. fully archive data
+            # 2. lin reg fit if the earlier period is at least half full and there exist
+            # the data for the prediction days (i'm not sure about that)
+            # 3. fit all you have take the rest from archive
+            # strategy 1
+            archive_to_live_delta = dt.timedelta(3)  # Though I think it's 2 ; TODO: check it well
+            daily_from_live = get_full_stubstitude_of_live(archive_data, i, archive_to_live_delta)
+            daily_from_live.index = pd.to_datetime(daily_from_live.index)
+
+        else:
+            current_live = live_data.loc[i]
+            daily_from_live = transform_hourly_to_daily(current_live, amount="single")
+
+        # fit daily_from_live to daily
+        # current_archive = archive_data.loc[i].iloc[:, 0].to_frame() # old way of doing that, now pull for that and have it adjusted by older stuff
+        current_archive = archive_data.loc[i].iloc[:, 0].to_frame()
+        adjusted_current_archive = calibrate_by_lin_reg(current_archive, cummulated_archive)
+        cummulated_archive = merge_data(cummulated_archive, adjusted_current_archive, strategy="average")
+
+        adjusted_daily = calibrate_by_lin_reg(daily_from_live, cummulated_archive)
+
+        merged = merge_data(cummulated_archive, adjusted_daily, strategy="average")
+        prediction_day = merged.index.date[-1] + dt.timedelta(1)
+        # that's the data you have for the prediction for the next day
+        prediction_day_to_dataset[prediction_day] = merged
+    return prediction_day_to_dataset
 
 
 if __name__ == "__main__":
