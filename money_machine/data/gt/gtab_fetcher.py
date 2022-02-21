@@ -1,7 +1,7 @@
 import math
 import re
 
-from money_machine.data.fetcher import Fetcher
+from money_machine.data.gt.fetcher import Fetcher
 import pathlib
 
 
@@ -118,7 +118,7 @@ class GtabFetcher(Fetcher):
 if __name__ == "__main__":
     import gtab
     import datetime as dt
-    from money_machine.data.gt_data import create_timeframe_from_datetime
+    from money_machine.data.gt.gt_data import create_timeframe_from_datetime
 
     setup_path = "./data/gtab/bitcoin"
     t = gtab.GTAB()

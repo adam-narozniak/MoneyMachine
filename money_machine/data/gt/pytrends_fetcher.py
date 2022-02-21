@@ -1,4 +1,4 @@
-from money_machine.data.fetcher import Fetcher
+from money_machine.data.gt.fetcher import Fetcher
 
 
 class PytrendsFetcher(Fetcher):

@@ -3,8 +3,8 @@ import pathlib
 
 import gtab
 
-from money_machine.data.gt_data import create_pulling_periods, create_anchor_banks
-from money_machine.data.gtab_fetcher import GtabFetcher
+from money_machine.data.gt.gt_data import create_pulling_periods, create_anchor_banks
+from money_machine.data.gt.gtab_fetcher import GtabFetcher
 
 if __name__ == "__main__":
     end_date = dt.date(2022, 2, 1)

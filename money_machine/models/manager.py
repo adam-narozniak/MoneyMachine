@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from tqdm import tqdm
 
-from money_machine.data.dataset import reshape_to_multistep_data
+from money_machine.data.fin.dataset import reshape_to_multistep_data
 from money_machine.evaluation.metrics import calculate_all_metrics
 from money_machine.models.utils import load_config
 from money_machine.visualization.stock import plot_stock
