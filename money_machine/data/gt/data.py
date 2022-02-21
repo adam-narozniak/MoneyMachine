@@ -115,7 +115,7 @@ def find_faulty_pull_ids(data, strategy="strict"):
             elif strategy == "last":
                 if pull_data.iloc[-1].values[0] == 0:
                     incomplete_ids.append(i)
-        except:
+        except KeyError:
             missing_ids.append(i)
     return missing_ids, incomplete_ids
 
