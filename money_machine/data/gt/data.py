@@ -138,7 +138,7 @@ def create_real_time_dataset(live_data, archive_data, missing_ids, incomplete_id
     faulty_ids = sorted(missing_ids + incomplete_ids)
     cumulated_archive = archive_data.loc[0].iloc[:, 0].to_frame()
     # missing_pull_ids = find_missing_pull_ids(live_data)
-    for i in ids:
+    for i in tqdm(ids):
 
         # transform live to daily (differently based on the type)
         if i in missing_ids:
