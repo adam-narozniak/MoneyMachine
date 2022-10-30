@@ -11,7 +11,7 @@ def load_saved_archive_data(path):
     return data
 
 
-def generate_multitimestep_data(data: pd.DataFrame, n_additional_days: int)->pd.DataFrame:
+def generate_multitimestep_data(data: pd.DataFrame, n_additional_days: int) -> pd.DataFrame:
     """
     Gather n_additional_days + 1 data points as a single instance.
 
@@ -47,3 +47,37 @@ def drop_nans(data):
 def divide_test_train(data, date):
     data_train, data_test = data.loc[:pd.Timestamp(date)], data.loc[pd.Timestamp(date) + dt.timedelta(1):]
     return data_train, data_test
+
+
+def create_y_for_n_days_ahead(y, n):
+    """
+    Shifts the data so the prediction for n days ahead is possible.
+    Args:
+        y: y data
+        n: number of days to shift
+
+    Returns:
+        shifted y data
+    """
+    y = y.shift(-n)
+    y.name = "y"
+    return y
+
+
+def find_common_beg_end_date(index1, index2):
+    """
+    Returns the beginning and end date for the two indexes so that they both have the give period.
+    Args:
+        index2:
+        index1:
+
+    Returns:
+        beginning date, end date
+    """
+    beg_date = max(index1[0], index2[0])
+    end_date = min(index1[-1], index2[-1])
+    return beg_date, end_date
+
+
+def find_common_index(index1, index2):
+    return index1.intersection(index2)

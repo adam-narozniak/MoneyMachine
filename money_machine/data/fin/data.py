@@ -32,7 +32,8 @@ def y_label_for_n_day_pred(data, n):
     Returns:
         labels, shape[0] == data.shape[0]
     """
-    y = data["Close"].shift(-n)
+    y = data["Close"]
+    y = y.shift(-n)
     y.name = "y"
     return y
 
